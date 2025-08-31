@@ -1,31 +1,60 @@
 <template>
-  <div id="chat-container">
-    <div class="chat-header">
-      <h2>Гибридный Чат-Бот</h2>
-      <p>Память: Short-Term + Long-Term (RAG)</p>
-      <small>Session ID: {{ sessionId }}</small>
-    </div>
-    <div class="chat-messages" ref="messagesContainer">
-      <div v-for="(msg, index) in messages" :key="index" :class="['message', msg.sender]">
-        {{ msg.text }}
+  <div class="page-wrapper" :class="theme">
+    <div class="container h-100 py-4">
+      
+      <div class="row h-100 justify-content-center align-items-center">
+        
+        <div class="col-12 col-md-10 col-lg-10 col-xl-8 h-100">
+          
+          <div class="d-flex flex-column h-100 shadow rounded-3 chat-window">
+            
+            <div class="chat-header p-3 d-flex justify-content-between align-items-center">
+              <div>
+                <h5 class="mb-0">Гибридный Чат-Бот</h5>
+                <small class="opacity-75">Session ID: {{ sessionId }}</small>
+              </div>
+              <button class="btn btn-outline-light" @click="toggleTheme">
+                {{ theme === 'dark' ? '☀️' : '🌙' }}
+              </button>
+            </div>
+
+            <div class="chat-messages p-3 flex-grow-1" ref="messagesContainer">
+              <div v-for="(msg, index) in messages" :key="index" 
+                  :class="['message', msg.sender === 'user' ? 'user' : 'assistant', 'mb-2']">
+                <div :class="['p-2 px-3 rounded-3', msg.sender === 'user' ? 'alert alert-primary' : 'alert-secondary']">
+                  {{ msg.text }}
+                </div>
+              </div>
+              <div v-if="isLoading" class="message assistant mb-2">
+                <div class="p-2 px-3 rounded-3 alert alert-secondary">
+                  ...
+                </div>
+              </div>
+            </div>
+
+            <div class="chat-input p-3">
+              <div class="input-group">
+                <input
+                  type="text"
+                  class="form-control"
+                  v-model="newMessage"
+                  @keyup.enter="sendMessage"
+                  placeholder="Введите ваше сообщение..."
+                  :disabled="isLoading"
+                />
+                <button class="btn btn-primary" @click="sendMessage" :disabled="isLoading">Отправить</button>
+              </div>
+            </div>
+            
+          </div>
+        </div>
       </div>
-       <div v-if="isLoading" class="message assistant">
-        ...
-      </div>
-    </div>
-    <div class="chat-input">
-      <input
-        v-model="newMessage"
-        @keyup.enter="sendMessage"
-        placeholder="Введите ваше сообщение..."
-        :disabled="isLoading"
-      />
-      <button @click="sendMessage" :disabled="isLoading">Отправить</button>
     </div>
   </div>
 </template>
 
 <script setup>
+// ... (раздел script остается БЕЗ ИЗМЕНЕНИЙ)
 import { ref, onMounted, nextTick } from 'vue';
 import axios from 'axios';
 
@@ -34,11 +63,15 @@ const newMessage = ref('');
 const sessionId = ref('');
 const isLoading = ref(false);
 const messagesContainer = ref(null);
+const theme = ref('dark');
 
-// Генерируем уникальный ID для сессии при загрузке компонента
+const toggleTheme = () => {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark';
+};
+
 onMounted(() => {
   sessionId.value = 'session_' + Math.random().toString(36).substr(2, 9);
-  messages.value.push({ sender: 'assistant', text: 'Здравствуйте! Чем могу помочь?' });
+  messages.value.push({ sender: 'assistant', text: 'Здравствуйте! Я чат-бот с гибридной памятью. Чем могу помочь?' });
 });
 
 const scrollToBottom = () => {
@@ -51,23 +84,18 @@ const scrollToBottom = () => {
 
 const sendMessage = async () => {
   if (newMessage.value.trim() === '' || isLoading.value) return;
-
   const userMessage = { sender: 'user', text: newMessage.value };
   messages.value.push(userMessage);
-  
   const messageToSend = newMessage.value;
   newMessage.value = '';
   isLoading.value = true;
   scrollToBottom();
-
   try {
     const response = await axios.post('http://127.0.0.1:5000/chat', {
       session_id: sessionId.value,
       message: messageToSend
     });
-    
     messages.value.push({ sender: 'assistant', text: response.data.reply });
-
   } catch (error) {
     console.error("Ошибка при отправке сообщения:", error);
     messages.value.push({ sender: 'assistant', text: 'Произошла ошибка. Попробуйте снова.' });
@@ -79,91 +107,89 @@ const sendMessage = async () => {
 </script>
 
 <style>
-/* Стили для чата, можете их улучшить */
-body {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  background-color: #f0f2f5;
-  margin: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+/* Стили теперь идеально дополняют сетку Bootstrap */
+
+/* Светлая тема */
+.light {
+  --bg-color: #f0f2f5;
+  --window-bg: #ffffff;
+  --text-color: #212529;
+  --border-color: #dee2e6;
+  --header-bg: #f8f9fa;
+  --input-bg: #ffffff;
+}
+
+/* Тёмная тема */
+.dark {
+  --bg-color: #121212;
+  --window-bg: #212529;
+  --text-color: #f8f9fa;
+  --border-color: #495057;
+  --header-bg: #343a40;
+  --input-bg: #495057;
+}
+
+html, body {
   height: 100vh;
 }
 
-#chat-container {
-  width: 500px;
-  height: 80vh;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
+.page-wrapper {
+  height: 100vh;
+  background-color: var(--bg-color);
+  transition: background-color 0.3s;
+}
+
+.chat-window {
+  max-height: 100%; /* Окно чата занимает всю высоту колонки */
+  background-color: var(--window-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
 }
 
 .chat-header {
-  padding: 20px;
-  border-bottom: 1px solid #e0e0e0;
-  text-align: center;
-  background-color: #42b983;
-  color: white;
-  border-radius: 8px 8px 0 0;
+  background-color: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
 }
-.chat-header h2, .chat-header p { margin: 0; }
-.chat-header small { opacity: 0.8; }
 
 .chat-messages {
-  flex-grow: 1;
-  padding: 20px;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 .message {
-  padding: 10px 15px;
-  border-radius: 18px;
-  max-width: 75%;
-  word-wrap: break-word;
+  display: flex;
+  max-width: 85%;
 }
-
 .message.user {
-  background-color: #0084ff;
-  color: white;
-  align-self: flex-end;
-  border-bottom-right-radius: 4px;
+  justify-content: flex-end;
+  margin-left: auto;
 }
-
 .message.assistant {
-  background-color: #e5e5ea;
-  color: black;
-  align-self: flex-start;
-  border-bottom-left-radius: 4px;
+  justify-content: flex-start;
+  margin-right: auto;
+}
+.alert {
+  border: none !important;
+  margin-bottom: 0 !important;
+}
+.alert-secondary {
+   background-color: var(--header-bg);
+   color: var(--text-color);
 }
 
 .chat-input {
-  display: flex;
-  padding: 20px;
-  border-top: 1px solid #e0e0e0;
+  background-color: var(--header-bg);
+  border-top: 1px solid var(--border-color);
 }
-
-.chat-input input {
-  flex-grow: 1;
-  border: 1px solid #ccc;
-  padding: 10px;
-  border-radius: 20px;
-  margin-right: 10px;
+.chat-input .form-control {
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  border-color: var(--border-color);
 }
-
-.chat-input button {
-  padding: 10px 20px;
-  border: none;
-  background-color: #42b983;
-  color: white;
-  border-radius: 20px;
-  cursor: pointer;
-}
-.chat-input button:disabled {
-  background-color: #a5d6b8;
+.chat-input .form-control:focus {
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  box-shadow: none;
+  border-color: #0d6efd;
 }
 </style>
