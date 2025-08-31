@@ -1,149 +1,153 @@
 <template>
-  <div class="page-wrapper" :class="theme">
-    <div class="container h-100 py-4">
-      <div class="row h-100 justify-content-center align-items-center">
-        <div class="col-12 col-md-10 col-lg-10 col-xl-10 h-100">
-          <div class="d-flex flex-column h-100 shadow rounded-3 chat-window">
-            
-            <div class="chat-header p-3 d-flex justify-content-between align-items-center">
-              <div>
-                <h5 class="mb-0">Гибридный Чат-Бот</h5>
-                <small class="opacity-75">Session ID: {{ sessionId }}</small>
-              </div>
-              <button class="btn btn-outline-light" @click="toggleTheme">
-                {{ theme === 'dark' ? '☀️' : '🌙' }}
-              </button>
-            </div>
-
-            <div class="chat-messages p-3 flex-grow-1" ref="messagesContainer">
-              <div v-for="(msg, index) in messages" :key="index" 
-                  :class="['message', msg.sender === 'user' ? 'user' : 'assistant', 'mb-2']">
-                <div 
-                  :class="['p-2 px-3 rounded-3 markdown-content', msg.sender === 'user' ? 'alert alert-primary' : 'alert-secondary']" 
-                  v-html="renderMarkdown(msg.text)">
-                </div>
-              </div>
-              <div v-if="isLoading" class="message assistant mb-2">
-                <div class="p-2 px-3 rounded-3 alert alert-secondary">
-                  ...
-                </div>
-              </div>
-            </div>
-
-            <div class="chat-input p-3">
-              <div class="input-group">
-                <input
-                  type="text"
-                  class="form-control"
-                  v-model="newMessage"
-                  @keyup.enter="sendMessage"
-                  placeholder="Введите ваше сообщение..."
-                  :disabled="isLoading"
-                />
-                <button class="btn btn-primary" @click="sendMessage" :disabled="isLoading">Отправить</button>
-              </div>
-            </div>
-            
-          </div>
-        </div>
-      </div>
+  <div class="page-wrapper d-flex" :class="theme">
+    <div class="sidebar-wrapper">
+      <Sidebar 
+        :projects="projects" 
+        :chats="chats"
+        :activeChatId="activeChatId"
+        @select-chat="selectChat"
+        @project-created="handleCreateProject"
+        @chat-created="handleCreateChat"
+        @delete-chat="handleDeleteChat"
+      />
+    </div>
+    <div class="chat-wrapper flex-grow-1">
+      <ChatWindow 
+        :chatId="activeChatId" 
+        :chatName="activeChatName"
+        :theme="theme" 
+        @toggle-theme="toggleTheme" 
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue';
-import axios from 'axios';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import { ref, onMounted, computed } from 'vue';
+import Sidebar from '@/components/Sidebar.vue';
+import ChatWindow from '@/components/ChatWindow.vue';
+import { getProjects, createProject, getChats, createChat, deleteChat } from '@/api';
 
-// 👇 ИЗМЕНЕНИЕ: Импортируем highlight.js и его стили 👇
-import hljs from 'highlight.js';
-// Вы можете выбрать любую тему здесь: https://highlightjs.org/static/demo/
-import 'highlight.js/styles/atom-one-dark.css';
-
-// 👇 ИЗМЕНЕНИЕ: Настраиваем marked для работы с highlight.js 👇
-marked.setOptions({
-  highlight: function(code, lang) {
-    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-    return hljs.highlight(code, { language }).value;
-  },
-  gfm: true,
-  breaks: true,
-});
-
-
-function preprocessSpecialTags(text) {
-  if (!text) return '';
-  const imageRegex = /\[Image of (.*?)\]/g;
-  return text.replace(imageRegex, (match, query) => {
-    const encodedQuery = encodeURIComponent(query.trim());
-    const imageUrl = `https://placehold.co/600x400/EEE/31343C?text=${encodedQuery}`;
-    return `<img src="${imageUrl}" alt="${query}" class="img-fluid rounded my-2" />`;
-  });
-}
-
-const renderMarkdown = (text) => {
-  if (!text) return '';
-  const processedText = preprocessSpecialTags(text);
-  // Теперь marked автоматически будет использовать highlight.js
-  const rawHtml = marked.parse(processedText);
-  return DOMPurify.sanitize(rawHtml);
-};
-
-// ... остальной <script setup> без изменений
-const messages = ref([]);
-const newMessage = ref('');
-const sessionId = ref('');
-const isLoading = ref(false);
-const messagesContainer = ref(null);
+// State
+const projects = ref([]);
+const chats = ref({}); // { projectId1: [chat1, chat2], projectId2: [...] }
+const activeChatId = ref(null);
 const theme = ref('dark');
 
+// Computed property to get active chat name
+const activeChatName = computed(() => {
+    if (!activeChatId.value) return '';
+    for (const projectId in chats.value) {
+        const chat = chats.value[projectId]?.find(c => c.id === activeChatId.value);
+        if (chat) return chat.name;
+    }
+    return '';
+});
+
+// Methods
 const toggleTheme = () => {
   theme.value = theme.value === 'dark' ? 'light' : 'dark';
 };
 
-onMounted(() => {
-  sessionId.value = 'session_' + Math.random().toString(36).substr(2, 9);
-  messages.value.push({ sender: 'assistant', text: 'Здравствуйте! Теперь я умею форматировать текст, показывать картинки и подсвечивать синтаксис кода. Проверьте!' });
-});
-
-const scrollToBottom = () => {
-  nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+const loadProjects = async () => {
+    try {
+        const response = await getProjects();
+        projects.value = response.data;
+        // Загружаем чаты для каждого проекта
+        for (const p of projects.value) {
+            await loadChats(p.id);
+        }
+    } catch (error) {
+        console.error("Ошибка загрузки проектов:", error);
     }
-  });
 };
 
-const sendMessage = async () => {
-  if (newMessage.value.trim() === '' || isLoading.value) return;
-  const userMessage = { sender: 'user', text: newMessage.value };
-  messages.value.push(userMessage);
-  const messageToSend = newMessage.value;
-  newMessage.value = '';
-  isLoading.value = true;
-  scrollToBottom();
-  try {
-    const response = await axios.post('/api/chat', {
-      session_id: sessionId.value,
-      message: messageToSend
-    });
-    messages.value.push({ sender: 'assistant', text: response.data.reply });
-  } catch (error) {
-    console.error("Ошибка при отправке сообщения:", error);
-    messages.value.push({ sender: 'assistant', text: 'Произошла ошибка. Попробуйте снова.' });
-  } finally {
-    isLoading.value = false;
-    scrollToBottom();
-  }
+const loadChats = async (projectId) => {
+    try {
+        const response = await getChats(projectId);
+        chats.value[projectId] = response.data;
+    } catch (error) {
+        console.error(`Ошибка загрузки чатов для проекта ${projectId}:`, error);
+    }
 };
+
+const selectChat = (chatId) => {
+    activeChatId.value = chatId;
+};
+
+const handleCreateProject = async (name) => {
+    try {
+        await createProject(name);
+        await loadProjects(); // Перезагружаем все проекты  
+    } catch (error) {
+        console.error("Ошибка создания проекта:", error);
+    }
+};
+
+const handleCreateChat = async ({ projectId, name }) => {
+    try {
+        activeChatId.value = newChat.id;
+        // 1. Сначала создаем чат и получаем его от сервера
+        const response = await createChat(projectId, name);
+        const newChat = response.data;
+        
+        // 2. Перезагружаем список чатов для КОНКРЕТНОГО проекта
+        await loadChats(projectId); 
+        
+        // 3. Делаем новый чат активным
+        selectChat(newChat.id); 
+    } catch (error) {
+        console.error("Ошибка создания чата:", error);
+    }
+};
+
+const handleDeleteChat = async (chatId) => {
+    try {
+        // Находим projectId, чтобы обновить нужный список
+        let projectIdToDeleteFrom = null;
+        for (const projectId in chats.value) {
+            if (chats.value[projectId]?.some(c => c.id === chatId)) {
+                projectIdToDeleteFrom = projectId;
+                break;
+            }
+        }
+        
+        await deleteChat(chatId);
+        
+        if (activeChatId.value === chatId) {
+            activeChatId.value = null; // Сбрасываем активный чат
+        }
+        if (projectIdToDeleteFrom) {
+            await loadChats(projectIdToDeleteFrom);
+        }
+    } catch (error) {
+        console.error("Ошибка удаления чата:", error);
+    }
+};
+
+
+onMounted(() => {
+    loadProjects();
+});
 </script>
 
 <style>
-/* ... (основные стили остаются без изменений) ... */
+/* Глобальные стили приложения */
+.page-wrapper {
+  height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  overflow: hidden;
+}
+.sidebar-wrapper {
+  width: 300px;
+  flex-shrink: 0;
+}
+.chat-wrapper {
+  height: 100vh;
+}
 
-/* Светлая тема */
+/* Переменные тем (из старого App.vue) */
 .light {
   --bg-color: #f0f2f5;
   --window-bg: #ffffff;
@@ -151,10 +155,8 @@ const sendMessage = async () => {
   --border-color: #dee2e6;
   --header-bg: #f8f9fa;
   --input-bg: #ffffff;
-  --code-bg: #f8f9fa; /* Фон для кода в светлой теме */
+  --code-bg: #f8f9fa;
 }
-
-/* Тёмная тема */
 .dark {
   --bg-color: #121212;
   --window-bg: #212529;
@@ -162,123 +164,23 @@ const sendMessage = async () => {
   --border-color: #495057;
   --header-bg: #343a40;
   --input-bg: #495057;
-  --code-bg: #282c34; /* Фон для кода в тёмной теме (из темы atom-one-dark) */
+  --code-bg: #282c34;
 }
 
-html, body {
-  height: 100vh;
+/* Стили для скроллбара */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
-.page-wrapper {
-  height: 100vh;
-  background-color: var(--bg-color);
-  transition: background-color 0.3s;
-}
-
-.chat-window {
-  max-height: 100%;
-  background-color: var(--window-bg);
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
-}
-
-.chat-header {
-  background-color: var(--header-bg);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.chat-messages {
-  overflow-y: auto;
-}
-
-.message {
-  display: flex;
-  max-width: 85%;
-}
-.message.user {
-  justify-content: flex-end;
-  margin-left: auto;
-}
-.message.assistant {
-  justify-content: flex-start;
-  margin-right: auto;
-}
-.alert {
-  border: none !important;
-  margin-bottom: 0 !important;
-}
-.alert-secondary {
-   background-color: var(--header-bg);
-   color: var(--text-color);
-}
-
-.chat-input {
-  background-color: var(--header-bg);
-  border-top: 1px solid var(--border-color);
-}
-.chat-input .form-control {
-  background-color: var(--input-bg);
-  color: var(--text-color);
-  border-color: var(--border-color);
-}
-.chat-input .form-control:focus {
-  background-color: var(--input-bg);
-  color: var(--text-color);
-  box-shadow: none;
-  border-color: #0d6efd;
-}
-
-.markdown-content p:last-child {
-  margin-bottom: 0;
-}
-
-.markdown-content h1, .markdown-content h2, .markdown-content h3, .markdown-content h4 {
-  margin-top: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-
-.markdown-content ul, .markdown-content ol {
-  padding-left: 1.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.markdown-content img {
-  max-width: 100%;
-  height: auto;
-}
-
-/* 👇 ИЗМЕНЕНИЕ: Стили для блоков кода 👇 */
-.markdown-content pre {
-  padding: 10px; /* Убираем padding, так как он будет у внутреннего <code> */
-  margin: 0.5rem 0;
-  border-radius: 6px;
-  background-color: var(--code-bg); /* Используем фон из темы */
-}
-.markdown-content pre code.hljs {
-  padding: 1em; /* Добавляем внутренние отступы */
-  border-radius: 6px;
-  background-color: transparent !important; /* Делаем фон от hljs прозрачным, чтобы видеть наш */
-}
-
-/* Адаптируем тему atom-one-dark для светлой темы */
-.light .hljs {
-  color: #383a42;
-}
-.light .hljs-comment,
-.light .hljs-quote {
-  color: #a0a1a7;
-}
-.light .hljs-variable,
-.light .hljs-template-variable,
-.light .hljs-tag,
-.light .hljs-name,
-.light .hljs-selector-id,
-.light .hljs-selector-class,
-.light .hljs-regexp,
-.light .hljs-deletion {
-  color: #e45649;
-}
-/* и так далее для других токенов, если нужно */
 </style>
 

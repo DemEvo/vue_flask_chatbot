@@ -5,3 +5,5 @@ faiss-cpu
 numpy
 flask-cors
 gunicorn
+Flask-SQLAlchemy
+Flask-Migrate

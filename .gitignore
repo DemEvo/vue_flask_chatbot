@@ -231,3 +231,5 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+*.db
+*.db-journal
