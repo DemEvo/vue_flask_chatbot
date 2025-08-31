@@ -8,6 +8,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from openai import OpenAI
 import uuid
+import json
 
 # 1. Инициализация и конфигурация
 # ----------------------------------------------------
@@ -19,6 +20,9 @@ CORS(app)
 
 # Инициализируем клиент OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+SAVE_PATH = "chat_history"
+os.makedirs(SAVE_PATH, exist_ok=True) # Создаем папку, если ее нет
 
 # Параметры нашей системы памяти
 SHORT_TERM_MEMORY_MAX_MESSAGES = 4  # Храним 2 вопроса и 2 ответа
@@ -52,6 +56,67 @@ def create_new_session(session_id):
         "vector_store": faiss.IndexFlatL2(EMBEDDING_DIMENSION),  # Векторный индекс FAISS
         "message_history": {}  # Словарь для хранения текстов сообщений по их ID в FAISS
     }
+
+
+def save_session(session_id):
+    if session_id in chat_sessions:
+        session_data = chat_sessions[session_id]
+        session_folder = os.path.join(SAVE_PATH, session_id)
+        os.makedirs(session_folder, exist_ok=True)
+
+        # Сохраняем индекс FAISS
+        faiss.write_index(session_data['vector_store'], os.path.join(session_folder, 'index.faiss'))
+
+        # Сохраняем историю сообщений
+        with open(os.path.join(session_folder, 'history.json'), 'w') as f:
+            # Преобразуем ключи-числа в строки для JSON
+            history_to_save = {str(k): v for k, v in session_data['message_history'].items()}
+            json.dump(history_to_save, f)
+
+        # Сохраняем краткосрочную память
+        with open(os.path.join(session_folder, 'short_term.json'), 'w') as f:
+            json.dump(session_data['short_term_memory'], f)
+
+        print(f"💾 Сессия {session_id} сохранена на диск.")
+
+
+def load_or_create_session(session_id):
+    if session_id in chat_sessions:
+        return chat_sessions[session_id]
+
+    session_folder = os.path.join(SAVE_PATH, session_id)
+    index_path = os.path.join(session_folder, 'index.faiss')
+    history_path = os.path.join(session_folder, 'history.json')
+    short_term_path = os.path.join(session_folder, 'short_term.json')
+
+    if os.path.exists(index_path):
+        # Если файлы существуют - загружаем
+        print(f"🔄 Загрузка сессии {session_id} с диска.")
+        vector_store = faiss.read_index(index_path)
+
+        with open(history_path, 'r') as f:
+            # Преобразуем ключи-строки обратно в числа
+            history_from_save = json.load(f)
+            message_history = {int(k): v for k, v in history_from_save.items()}
+
+        with open(short_term_path, 'r') as f:
+            short_term_memory = json.load(f)
+
+        chat_sessions[session_id] = {
+            "short_term_memory": short_term_memory,
+            "vector_store": vector_store,
+            "message_history": message_history
+        }
+    else:
+        # Если нет - создаем новую
+        print(f"✨ Создание новой сессии: {session_id}")
+        chat_sessions[session_id] = {
+            "short_term_memory": [],
+            "vector_store": faiss.IndexFlatL2(EMBEDDING_DIMENSION),
+            "message_history": {}
+        }
+
+    return chat_sessions[session_id]
 
 
 # 3. Основной API-эндпоинт

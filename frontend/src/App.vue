@@ -91,10 +91,11 @@ const sendMessage = async () => {
   isLoading.value = true;
   scrollToBottom();
   try {
-    const response = await axios.post('http://127.0.0.1:5000/chat', {
-      session_id: sessionId.value,
-      message: messageToSend
+    const response = await axios.post('/api/chat', {
+    session_id: sessionId.value,
+    message: messageToSend
     });
+    
     messages.value.push({ sender: 'assistant', text: response.data.reply });
   } catch (error) {
     console.error("Ошибка при отправке сообщения:", error);

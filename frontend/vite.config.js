@@ -15,4 +15,17 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
+  server: {
+    proxy: {
+      // Все запросы, начинающиеся с /api
+      '/api': {
+        // будут перенаправлены на ваш Flask-сервер
+        target: 'http://127.0.0.1:5000',
+        // Это необходимо, чтобы сервер бэкенда мог корректно обработать запрос
+        changeOrigin: true,
+        // Убираем /api из пути, чтобы на Flask пришел запрос /chat, а не /api/chat
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    }
+  }
 })

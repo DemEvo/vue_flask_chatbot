@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  # Сервис для бэкенда
+  backend:
+    build: ./backend
+    container_name: chat_backend
+    env_file:
+      - ./backend/.env # Передаем API ключ из .env файла
+    volumes:
+      # Пробрасываем папку с историей чатов, чтобы она не удалялась вместе с контейнером
+      - ./backend/chat_history:/app/chat_history
+    restart: unless-stopped
+
+  # Сервис для фронтенда
+  frontend:
+    build: ./frontend
+    container_name: chat_frontend
+    ports:
+      # Пробрасываем порт 8080 с нашей машины на порт 80 в контейнере
+      - "8080:80"
+    depends_on:
+      - backend # Указываем, что фронтенд зависит от бэкенда
+    restart: unless-stopped

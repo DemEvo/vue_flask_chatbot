@@ -4,3 +4,4 @@ openai
 faiss-cpu
 numpy
 flask-cors
+gunicorn
