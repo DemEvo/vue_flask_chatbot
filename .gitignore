@@ -205,6 +205,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+vector_stores/
 
 # Node ignore
 .DS_Store
@@ -233,3 +234,4 @@ pnpm-debug.log*
 *.sw?
 *.db
 *.db-journal
+*.faiss

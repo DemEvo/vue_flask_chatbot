@@ -23,7 +23,7 @@
                     <div :id="'collapse' + project.id" class="accordion-collapse collapse" data-bs-parent="#projectsAccordion">
                         <div class="accordion-body">
                             <ul class="list-group list-group-flush">
-                                <li v-for="chat in chats[project.id]" :key="chat.id"
+                                <li v-for="chat in project.chats" :key="chat.id"
                                     class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
                                     :class="{ active: chat.id === activeChatId }"
                                     @click="$emit('select-chat', chat.id)">

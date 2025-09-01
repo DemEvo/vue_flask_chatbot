@@ -22,3 +22,10 @@ export const deleteChat = (id) => apiClient.delete(`/chats/${id}`);
 // --- Messages API ---
 export const getMessages = (chatId, page = 1) => apiClient.get(`/chats/${chatId}/messages?page=${page}`);
 export const sendMessage = (chatId, message) => apiClient.post(`/chats/${chatId}/messages`, { message });
+export const setChatPrompt = (chatId, promptId) => apiClient.put(`/chats/${chatId}/prompt`, { prompt_id: promptId });
+
+// --- Prompts API ---
+export const getPrompts = (projectId) => apiClient.get(`/projects/${projectId}/prompts`);
+export const createPrompt = (data) => apiClient.post('/prompts', data);
+export const updatePrompt = (id, data) => apiClient.put(`/prompts/${id}`, data);
+export const deletePrompt = (id) => apiClient.delete(`/prompts/${id}`);

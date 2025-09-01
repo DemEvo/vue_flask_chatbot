@@ -1,10 +1,9 @@
 <template>
-  <div class="page-wrapper d-flex inter inter-300" :class="theme">
+  <div class="page-wrapper d-flex" :class="theme">
     <div class="sidebar-wrapper">
       <Sidebar 
-        :projects="projects" 
-        :chats="chats"
-        :activeChatId="activeChatId"
+        :projects="projects"
+        :active-chat-id="activeChatId"
         @select-chat="selectChat"
         @project-created="handleCreateProject"
         @rename-project="handleRenameProject"
@@ -16,10 +15,10 @@
     </div>
     <div class="chat-wrapper flex-grow-1">
       <ChatWindow 
-        :chatId="activeChatId" 
-        :chatName="activeChatName"
+        :chat="activeChat" 
         :theme="theme" 
-        @toggle-theme="toggleTheme" 
+        @toggle-theme="toggleTheme"
+        @chat-updated="loadProjects"
       />
     </div>
   </div>
@@ -31,23 +30,22 @@ import Sidebar from '@/components/Sidebar.vue';
 import ChatWindow from '@/components/ChatWindow.vue';
 import { 
     getProjects, createProject, renameProject, deleteProject,
-    getChats, createChat, renameChat, deleteChat 
+    createChat, renameChat, deleteChat 
 } from '@/api';
 
 // State
 const projects = ref([]);
-const chats = ref({});
 const activeChatId = ref(null);
 const theme = ref('dark');
 
 // Computed property
-const activeChatName = computed(() => {
-    if (!activeChatId.value) return '';
-    for (const projectId in chats.value) {
-        const chat = chats.value[projectId]?.find(c => c.id === activeChatId.value);
-        if (chat) return chat.name;
+const activeChat = computed(() => {
+    if (!activeChatId.value) return null;
+    for (const project of projects.value) {
+        const chat = project.chats?.find(c => c.id === activeChatId.value);
+        if (chat) return chat;
     }
-    return '';
+    return null;
 });
 
 // Methods
@@ -59,20 +57,8 @@ const loadProjects = async () => {
     try {
         const response = await getProjects();
         projects.value = response.data;
-        for (const p of projects.value) {
-            await loadChats(p.id);
-        }
     } catch (error) {
         console.error("Ошибка загрузки проектов:", error);
-    }
-};
-
-const loadChats = async (projectId) => {
-    try {
-        const response = await getChats(projectId);
-        chats.value[projectId] = response.data;
-    } catch (error) {
-        console.error(`Ошибка загрузки чатов для проекта ${projectId}:`, error);
     }
 };
 
@@ -85,9 +71,7 @@ const handleCreateProject = async (name) => {
     try {
         await createProject(name);
         await loadProjects();
-    } catch (error) {
-        console.error("Ошибка создания проекта:", error);
-    }
+    } catch (error) { console.error("Ошибка создания проекта:", error); }
 };
 
 const handleRenameProject = async ({ id, name }) => {
@@ -95,71 +79,47 @@ const handleRenameProject = async ({ id, name }) => {
         await renameProject(id, name);
         const project = projects.value.find(p => p.id === id);
         if (project) project.name = name;
-    } catch (error) {
-        console.error("Ошибка переименования проекта:", error);
-    }
+    } catch (error) { console.error("Ошибка переименования проекта:", error); }
 };
 
 const handleDeleteProject = async (projectId) => {
     try {
         await deleteProject(projectId);
-        await loadProjects();
-        if (!Object.values(chats.value).flat().some(c => c.id === activeChatId.value)) {
+        if (activeChat.value?.project_id === projectId) {
             activeChatId.value = null;
         }
-    } catch (error) {
-        console.error("Ошибка удаления проекта:", error);
-    }
+        await loadProjects();
+    } catch (error) { console.error("Ошибка удаления проекта:", error); }
 };
-
 
 // --- Chat CRUD ---
 const handleCreateChat = async ({ projectId, name }) => {
     try {
         const response = await createChat(projectId, name);
-        await loadChats(projectId);
+        await loadProjects(); // Reload all to get updated chat list
         selectChat(response.data.id);
-    } catch (error) {
-        console.error("Ошибка создания чата:", error);
-    }
+    } catch (error) { console.error("Ошибка создания чата:", error); }
 };
 
 const handleRenameChat = async ({ id, name }) => {
     try {
         await renameChat(id, name);
-        for (const projectId in chats.value) {
-            const chat = chats.value[projectId].find(c => c.id === id);
-            if (chat) {
-                chat.name = name;
-                break;
-            }
+        const project = projects.value.find(p => p.id === activeChat.value.project_id);
+        if (project) {
+            const chat = project.chats.find(c => c.id === id);
+            if (chat) chat.name = name;
         }
-    } catch (error) {
-        console.error("Ошибка переименования чата:", error);
-    }
+    } catch (error) { console.error("Ошибка переименования чата:", error); }
 };
 
 const handleDeleteChat = async (chatId) => {
     try {
-        let projectIdToDeleteFrom = null;
-        for (const projectId in chats.value) {
-            if (chats.value[projectId]?.some(c => c.id === chatId)) {
-                projectIdToDeleteFrom = projectId;
-                break;
-            }
-        }
-        
         await deleteChat(chatId);
-        
         if (activeChatId.value === chatId) {
             activeChatId.value = null;
         }
-        if (projectIdToDeleteFrom) {
-            await loadChats(projectIdToDeleteFrom);
-        }
-    } catch (error) {
-        console.error("Ошибка удаления чата:", error);
-    }
+        await loadProjects(); // Reload all to get updated chat list
+    } catch (error) { console.error("Ошибка удаления чата:", error); }
 };
 
 onMounted(loadProjects);

@@ -1,66 +1,76 @@
 <template>
     <div class="d-flex flex-column h-100">
+        <!-- Placeholder for when no chat is selected -->
         <div v-if="!chatId" class="d-flex flex-grow-1 justify-content-center align-items-center">
             <div class="text-center text-muted">
                 <h3>Выберите чат</h3>
                 <p>...или создайте новый в панели слева.</p>
             </div>
         </div>
+        <!-- Main chat interface -->
         <template v-else>
             <div class="chat-header p-3 d-flex justify-content-between align-items-center">
                 <div>
                     <h5 class="mb-0">{{ chatName }}</h5>
+                    <small v-if="activePrompt">Роль: {{ activePrompt.name }}</small>
                 </div>
-                <button class="btn btn-outline-light" @click="$emit('toggle-theme')">
-                    {{ theme === 'dark' ? '☀️' : '🌙' }}
-                </button>
+                <div class="btn-group">
+                    <button class="btn btn-outline-secondary" @click="openPromptManager">
+                        <i class="bi bi-robot"></i> Роли
+                    </button>
+                    <button class="btn btn-outline-light" @click="$emit('toggle-theme')">
+                        {{ theme === 'dark' ? '☀️' : '🌙' }}
+                    </button>
+                </div>
             </div>
 
+            <!-- Messages display -->
             <div class="chat-messages p-3 flex-grow-1" ref="messagesContainer" @scroll="handleScroll">
                  <div v-if="isLoadingMore" class="text-center text-muted my-2">
                     <div class="spinner-border spinner-border-sm" role="status"></div>
                 </div>
-                <div v-for="msg in messages" :key="msg.id" 
-                    :class="['message', msg.role === 'user' ? 'user' : 'assistant', 'mb-2']">
-                    <div :class="['p-2 px-3 rounded-3 markdown-content', msg.role === 'user' ? 'alert alert-primary' : 'alert-secondary']" 
-                        v-html="renderMarkdown(msg.content)">
-                    </div>
+                <div v-for="msg in messages" :key="msg.id" :class="['message', msg.role === 'user' ? 'user' : 'assistant', 'mb-2']">
+                    <div :class="['p-2 px-3 rounded-3 markdown-content', msg.role === 'user' ? 'alert alert-primary' : 'alert-secondary']" v-html="renderMarkdown(msg.content)"></div>
                 </div>
                 <div v-if="isLoading" class="message assistant mb-2">
-                    <div class="p-2 px-3 rounded-3 alert alert-secondary">
-                        ...
-                    </div>
+                    <div class="p-2 px-3 rounded-3 alert alert-secondary">...</div>
                 </div>
             </div>
 
+            <!-- Message input -->
             <div class="chat-input p-3">
                 <div class="input-group">
-                    <textarea
-                        ref="textareaRef"
-                        class="form-control"
-                        rows="1"
-                        v-model="newMessage"
-                        @keydown.enter.exact.prevent="handleSendMessage"
-                        @input="autoResizeTextarea"
-                        :disabled="isLoading"
-                        placeholder="Введите ваше сообщение... (Shift+Enter для новой строки)"
-                    ></textarea>
+                    <textarea ref="textareaRef" class="form-control" rows="1" v-model="newMessage"
+                        @keydown.enter.exact.prevent="handleSendMessage" @input="autoResizeTextarea"
+                        :disabled="isLoading" placeholder="Введите ваше сообщение... (Shift+Enter для новой строки)"></textarea>
                     <button class="btn btn-primary" @click="handleSendMessage" :disabled="isLoading">Отправить</button>
                 </div>
             </div>
         </template>
+        
+        <!-- Prompt Manager Modal -->
+        <PromptManager 
+            v-if="chatId"
+            ref="promptManagerRef" 
+            :project-id="projectId" 
+            :active-prompt-id="activePromptId"
+            @prompt-selected="handlePromptSelected"
+            @prompts-updated="loadPromptsForProject"
+            :unique-id="uniqueId"
+        />
     </div>
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue';
-import { getMessages, sendMessage } from '@/api';
+import { ref, watch, nextTick, computed } from 'vue';
+import { getMessages, sendMessage, getPrompts, setChatPrompt } from '@/api.js';
+import PromptManager from './PromptManager.vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/atom-one-dark.css';
 
-// Markdown and Highlight.js setup
+// ... (marked setup remains the same)
 marked.setOptions({
   highlight: (code, lang) => {
     const language = hljs.getLanguage(lang) ? lang : 'plaintext';
@@ -78,11 +88,18 @@ const renderMarkdown = (text) => {
 
 // Component props and emits
 const props = defineProps({
-    chatId: Number,
-    chatName: String,
+    chat: Object, // Pass the whole chat object
     theme: String,
 });
-const emit = defineEmits(['toggle-theme', 'message-sent']);
+const emit = defineEmits(['toggle-theme', 'chat-updated']);
+
+// Computed properties from chat object
+const chatId = computed(() => props.chat?.id);
+const chatName = computed(() => props.chat?.name);
+const projectId = computed(() => props.chat?.project_id);
+const activePromptId = ref(props.chat?.active_prompt_id);
+const promptManagerRef = ref(null);
+
 
 // Component state
 const messages = ref([]);
@@ -92,31 +109,45 @@ const isLoadingMore = ref(false);
 const currentPage = ref(1);
 const hasMoreMessages = ref(true);
 const messagesContainer = ref(null);
+const textareaRef = ref(null);
+const prompts = ref([]);
+const uniqueId = Date.now(); // For unique modal ID
 
+const activePrompt = computed(() => {
+    return prompts.value.find(p => p.id === activePromptId.value);
+});
+
+const openPromptManager = () => {
+    promptManagerRef.value?.show();
+};
+
+const loadPromptsForProject = async () => {
+    if (!projectId.value) return;
+    try {
+        const response = await getPrompts(projectId.value);
+        prompts.value = response.data;
+    } catch(e) { console.error(e); }
+};
+
+// ... (autoResizeTextarea remains the same)
 const autoResizeTextarea = () => {
     const el = textareaRef.value;
     if (el) {
         el.style.height = 'auto';
-        const maxHeight = 200; // Максимальная высота в пикселях
+        const maxHeight = 200;
         const newHeight = el.scrollHeight;
-        if (newHeight > maxHeight) {
-            el.style.height = `${maxHeight}px`;
-            el.style.overflowY = 'auto';
-        } else {
-            el.style.height = `${newHeight}px`;
-            el.style.overflowY = 'hidden';
-        }
+        el.style.height = `${Math.min(newHeight, maxHeight)}px`;
+        el.style.overflowY = newHeight > maxHeight ? 'auto' : 'hidden';
     }
 };
 
-// Load initial messages for a chat
 const loadMessages = async (id, loadMore = false) => {
     if (!id || (loadMore && !hasMoreMessages.value)) return;
 
-    if (loadMore) {
-        isLoadingMore.value = true;
-    } else {
-        isLoading.value = true;
+    const loadingRef = loadMore ? isLoadingMore : isLoading;
+    loadingRef.value = true;
+    
+    if (!loadMore) {
         messages.value = [];
         currentPage.value = 1;
         hasMoreMessages.value = true;
@@ -124,42 +155,44 @@ const loadMessages = async (id, loadMore = false) => {
 
     try {
         const response = await getMessages(id, currentPage.value);
-        const newMessages = response.data.messages.reverse(); // API returns newest first
+        const newMessages = response.data.messages.reverse();
         messages.value = loadMore ? [...newMessages, ...messages.value] : newMessages;
         hasMoreMessages.value = response.data.has_next;
+        activePromptId.value = response.data.active_prompt_id;
         currentPage.value++;
     } catch (error) {
         console.error("Ошибка загрузки сообщений:", error);
     } finally {
-        isLoading.value = false;
-        isLoadingMore.value = false;
-        if (!loadMore) {
-            scrollToBottom();
-        }
+        loadingRef.value = false;
+        if (!loadMore) scrollToBottom();
     }
 };
 
-// Watch for chat changes
-watch(() => props.chatId, (newId) => {
-    loadMessages(newId);
-});
+watch(chatId, (newId) => {
+    if (newId) {
+        loadMessages(newId);
+        loadPromptsForProject();
+        nextTick(() => textareaRef.value?.focus());
+    } else {
+        messages.value = [];
+    }
+}, { immediate: true });
 
-// Send new message
 const handleSendMessage = async () => {
     if (newMessage.value.trim() === '' || isLoading.value) return;
 
     const content = newMessage.value;
     newMessage.value = '';
     isLoading.value = true;
-    messages.value.push({ id: Date.now(), role: 'user', content });
+    messages.value.push({ id: Date.now(), role: 'user', content, created_at: new Date().toISOString() });
     scrollToBottom();
 
     try {
-        const response = await sendMessage(props.chatId, content);
+        const response = await sendMessage(chatId.value, content);
         messages.value.push(response.data);
     } catch (error) {
         console.error("Ошибка отправки сообщения:", error);
-        messages.value.push({ id: Date.now(), role: 'assistant', content: 'Произошла ошибка.' });
+        messages.value.push({ id: Date.now(), role: 'assistant', content: 'Произошла ошибка.', created_at: new Date().toISOString() });
     } finally {
         isLoading.value = false;
         scrollToBottom();
@@ -173,13 +206,22 @@ const handleSendMessage = async () => {
     }
 };
 
-// Infinite scroll handler
-const handleScroll = () => {
-    if (messagesContainer.value?.scrollTop === 0 && !isLoadingMore.value && hasMoreMessages.value) {
-        loadMessages(props.chatId, true);
+const handlePromptSelected = async (promptId) => {
+    try {
+        await setChatPrompt(chatId.value, promptId);
+        activePromptId.value = promptId;
+        emit('chat-updated'); // Notify App.vue to refetch chat data
+    } catch (error) {
+        console.error("Ошибка установки промпта:", error);
     }
 };
 
+// ... (handleScroll and scrollToBottom remain the same)
+const handleScroll = () => {
+    if (messagesContainer.value?.scrollTop === 0 && !isLoadingMore.value && hasMoreMessages.value) {
+        loadMessages(chatId.value, true);
+    }
+};
 const scrollToBottom = () => {
     nextTick(() => {
         if (messagesContainer.value) {
@@ -187,8 +229,8 @@ const scrollToBottom = () => {
         }
     });
 };
-
 </script>
+
 
 <style>
 
@@ -269,18 +311,6 @@ const scrollToBottom = () => {
     overflow-y: auto;
 }
 
-.chat-input textarea.form-control::after  {
-  content: "⋯";
-  position: absolute;
-  bottom: 5px;
-  right: 5px;
-  width: 20px;
-  height: 20px;
-  font-size: 20px;
-  color: #aaa;
-  pointer-events: none; /* клик проходит мимо */
-  z-index: 1;
-}
 
 .markdown-content p:last-child {
   margin-bottom: 0;
@@ -313,6 +343,7 @@ const scrollToBottom = () => {
   border-radius: 6px;
   background-color: transparent !important; /* Делаем фон от hljs прозрачным, чтобы видеть наш */
 }
+
 
 /* Адаптируем тему atom-one-dark для светлой темы */
 .light .hljs {
