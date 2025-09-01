@@ -1,0 +1,56 @@
+/* Глобальные переменные и стили SCSS */
+
+// 1. Переменные для тем
+.light {
+  --bg-color: #f0f2f5;
+  --window-bg: #ffffff;
+  --text-color: #212529;
+  --border-color: #dee2e6;
+  --header-bg: #f8f9fa;
+  --input-bg: #ffffff;
+  --code-bg: #f8f9fa;
+}
+
+.dark {
+  --bg-color: #121212;
+  --window-bg: #212529;
+  --text-color: #f8f9fa;
+  --border-color: #495057;
+  --header-bg: #303830;
+  --input-bg: #495057;
+  --code-bg: #282c34;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+
+// 2. Стили для всей страницы
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  font-family: "Inter", sans-serif;
+}
+
+.page-wrapper {
+  height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  overflow: hidden;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+// 3. Стили для скроллбара
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+  &:hover {
+    background: #555;
+  }
+}

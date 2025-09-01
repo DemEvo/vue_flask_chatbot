@@ -1,5 +1,5 @@
 <template>
-  <div class="page-wrapper d-flex" :class="theme">
+  <div class="page-wrapper d-flex inter-300" :class="theme">
     <div class="sidebar-wrapper">
       <Sidebar 
         :projects="projects"
@@ -125,16 +125,25 @@ const handleDeleteChat = async (chatId) => {
 onMounted(loadProjects);
 </script>
 
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+<style lang="scss">
+
 .inter {
   font-family: "Inter", sans-serif;
   font-optical-sizing: auto;
   font-style: normal;
+  
+  &-100 { font-weight: 100; }
+  &-200 { font-weight: 200; }
+  &-300 { font-weight: 300; }
+  &-400 { font-weight: 400; }
+  &-500 { font-weight: 500; }
+  &-600 { font-weight: 600; }
+  &-700 { font-weight: 700; }
+  &-800 { font-weight: 800; }
+  &-900 { font-weight: 900; }
+  
 }
-.inter-300 {
-  font-weight: 300;
-}
+
 /* ... styles remain unchanged ... */
 .page-wrapper {
   height: 100vh;

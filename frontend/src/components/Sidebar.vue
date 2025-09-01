@@ -12,7 +12,7 @@
                 <div v-for="project in projects" :key="project.id" class="accordion-item">
                     <h2 class="accordion-header" :id="'heading' + project.id">
                         <button class="accordion-button collapsed d-flex justify-content-between" type="button" data-bs-toggle="collapse" :data-bs-target="'#collapse' + project.id">
-                            <span class="text-truncate me-2">{{ project.name }}</span>
+                            <div class="text-truncate me-2">{{ project.name }}</div>
                             <!-- Project Actions -->
                             <div class="project-actions">
                                 <i class="bi bi-pencil-square action-icon" @click.stop="handleRenameProject(project.id, project.name)"></i>

@@ -15,6 +15,16 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
+  css: {
+    preprocessorOptions: {
+      sass: {
+        extension: '.scss',
+        options: {
+          includePaths: ['~bootstrap/scss']
+        }
+      }
+    }
+  },
   server: {
     proxy: {
       // Все запросы, начинающиеся с /api

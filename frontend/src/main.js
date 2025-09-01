@@ -4,4 +4,6 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './assets/global.css'
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 
+import './assets/main.scss'
+
 createApp(App).mount('#app')
