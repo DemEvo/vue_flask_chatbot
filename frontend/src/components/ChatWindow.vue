@@ -35,9 +35,16 @@
 
             <div class="chat-input p-3">
                 <div class="input-group">
-                    <input type="text" class="form-control" v-model="newMessage"
-                        @keyup.enter="handleSendMessage" :disabled="isLoading"
-                        placeholder="Введите ваше сообщение..." />
+                    <textarea
+                        ref="textareaRef"
+                        class="form-control"
+                        rows="1"
+                        v-model="newMessage"
+                        @keydown.enter.exact.prevent="handleSendMessage"
+                        @input="autoResizeTextarea"
+                        :disabled="isLoading"
+                        placeholder="Введите ваше сообщение... (Shift+Enter для новой строки)"
+                    ></textarea>
                     <button class="btn btn-primary" @click="handleSendMessage" :disabled="isLoading">Отправить</button>
                 </div>
             </div>
@@ -85,6 +92,22 @@ const isLoadingMore = ref(false);
 const currentPage = ref(1);
 const hasMoreMessages = ref(true);
 const messagesContainer = ref(null);
+
+const autoResizeTextarea = () => {
+    const el = textareaRef.value;
+    if (el) {
+        el.style.height = 'auto';
+        const maxHeight = 200; // Максимальная высота в пикселях
+        const newHeight = el.scrollHeight;
+        if (newHeight > maxHeight) {
+            el.style.height = `${maxHeight}px`;
+            el.style.overflowY = 'auto';
+        } else {
+            el.style.height = `${newHeight}px`;
+            el.style.overflowY = 'hidden';
+        }
+    }
+};
 
 // Load initial messages for a chat
 const loadMessages = async (id, loadMore = false) => {
@@ -140,6 +163,13 @@ const handleSendMessage = async () => {
     } finally {
         isLoading.value = false;
         scrollToBottom();
+        nextTick(() => {
+            if (textareaRef.value) {
+                textareaRef.value.style.height = 'auto';
+                textareaRef.value.style.overflowY = 'hidden';
+                textareaRef.value.focus();
+            }
+        });
     }
 };
 
@@ -231,6 +261,25 @@ const scrollToBottom = () => {
   color: var(--text-color);
   box-shadow: none;
   border-color: #0d6efd;
+}
+
+.chat-input textarea.form-control  {
+    min-height: 80px;
+    resize: vertical;
+    overflow-y: auto;
+}
+
+.chat-input textarea.form-control::after  {
+  content: "⋯";
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+  color: #aaa;
+  pointer-events: none; /* клик проходит мимо */
+  z-index: 1;
 }
 
 .markdown-content p:last-child {

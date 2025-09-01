@@ -1,5 +1,5 @@
 <template>
-  <div class="page-wrapper d-flex" :class="theme">
+  <div class="page-wrapper d-flex inter inter-300" :class="theme">
     <div class="sidebar-wrapper">
       <Sidebar 
         :projects="projects" 
@@ -7,7 +7,10 @@
         :activeChatId="activeChatId"
         @select-chat="selectChat"
         @project-created="handleCreateProject"
+        @rename-project="handleRenameProject"
+        @delete-project="handleDeleteProject"
         @chat-created="handleCreateChat"
+        @rename-chat="handleRenameChat"
         @delete-chat="handleDeleteChat"
       />
     </div>
@@ -26,15 +29,18 @@
 import { ref, onMounted, computed } from 'vue';
 import Sidebar from '@/components/Sidebar.vue';
 import ChatWindow from '@/components/ChatWindow.vue';
-import { getProjects, createProject, getChats, createChat, deleteChat } from '@/api';
+import { 
+    getProjects, createProject, renameProject, deleteProject,
+    getChats, createChat, renameChat, deleteChat 
+} from '@/api';
 
 // State
 const projects = ref([]);
-const chats = ref({}); // { projectId1: [chat1, chat2], projectId2: [...] }
+const chats = ref({});
 const activeChatId = ref(null);
 const theme = ref('dark');
 
-// Computed property to get active chat name
+// Computed property
 const activeChatName = computed(() => {
     if (!activeChatId.value) return '';
     for (const projectId in chats.value) {
@@ -53,7 +59,6 @@ const loadProjects = async () => {
     try {
         const response = await getProjects();
         projects.value = response.data;
-        // Загружаем чаты для каждого проекта
         for (const p of projects.value) {
             await loadChats(p.id);
         }
@@ -75,35 +80,67 @@ const selectChat = (chatId) => {
     activeChatId.value = chatId;
 };
 
+// --- Project CRUD ---
 const handleCreateProject = async (name) => {
     try {
         await createProject(name);
-        await loadProjects(); // Перезагружаем все проекты  
+        await loadProjects();
     } catch (error) {
         console.error("Ошибка создания проекта:", error);
     }
 };
 
+const handleRenameProject = async ({ id, name }) => {
+    try {
+        await renameProject(id, name);
+        const project = projects.value.find(p => p.id === id);
+        if (project) project.name = name;
+    } catch (error) {
+        console.error("Ошибка переименования проекта:", error);
+    }
+};
+
+const handleDeleteProject = async (projectId) => {
+    try {
+        await deleteProject(projectId);
+        await loadProjects();
+        if (!Object.values(chats.value).flat().some(c => c.id === activeChatId.value)) {
+            activeChatId.value = null;
+        }
+    } catch (error) {
+        console.error("Ошибка удаления проекта:", error);
+    }
+};
+
+
+// --- Chat CRUD ---
 const handleCreateChat = async ({ projectId, name }) => {
     try {
-        activeChatId.value = newChat.id;
-        // 1. Сначала создаем чат и получаем его от сервера
         const response = await createChat(projectId, name);
-        const newChat = response.data;
-        
-        // 2. Перезагружаем список чатов для КОНКРЕТНОГО проекта
-        await loadChats(projectId); 
-        
-        // 3. Делаем новый чат активным
-        selectChat(newChat.id); 
+        await loadChats(projectId);
+        selectChat(response.data.id);
     } catch (error) {
         console.error("Ошибка создания чата:", error);
     }
 };
 
+const handleRenameChat = async ({ id, name }) => {
+    try {
+        await renameChat(id, name);
+        for (const projectId in chats.value) {
+            const chat = chats.value[projectId].find(c => c.id === id);
+            if (chat) {
+                chat.name = name;
+                break;
+            }
+        }
+    } catch (error) {
+        console.error("Ошибка переименования чата:", error);
+    }
+};
+
 const handleDeleteChat = async (chatId) => {
     try {
-        // Находим projectId, чтобы обновить нужный список
         let projectIdToDeleteFrom = null;
         for (const projectId in chats.value) {
             if (chats.value[projectId]?.some(c => c.id === chatId)) {
@@ -115,7 +152,7 @@ const handleDeleteChat = async (chatId) => {
         await deleteChat(chatId);
         
         if (activeChatId.value === chatId) {
-            activeChatId.value = null; // Сбрасываем активный чат
+            activeChatId.value = null;
         }
         if (projectIdToDeleteFrom) {
             await loadChats(projectIdToDeleteFrom);
@@ -125,14 +162,20 @@ const handleDeleteChat = async (chatId) => {
     }
 };
 
-
-onMounted(() => {
-    loadProjects();
-});
+onMounted(loadProjects);
 </script>
 
 <style>
-/* Глобальные стили приложения */
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+.inter {
+  font-family: "Inter", sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+}
+.inter-300 {
+  font-weight: 300;
+}
+/* ... styles remain unchanged ... */
 .page-wrapper {
   height: 100vh;
   background-color: var(--bg-color);
@@ -146,8 +189,7 @@ onMounted(() => {
 .chat-wrapper {
   height: 100vh;
 }
-
-/* Переменные тем (из старого App.vue) */
+/* ... theme variables ... */
 .light {
   --bg-color: #f0f2f5;
   --window-bg: #ffffff;
@@ -166,8 +208,7 @@ onMounted(() => {
   --input-bg: #495057;
   --code-bg: #282c34;
 }
-
-/* Стили для скроллбара */
+/* ... scrollbar styles ... */
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -183,4 +224,3 @@ onMounted(() => {
 }
 
 </style>
-

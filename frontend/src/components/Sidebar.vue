@@ -11,8 +11,13 @@
             <div class="accordion" id="projectsAccordion">
                 <div v-for="project in projects" :key="project.id" class="accordion-item">
                     <h2 class="accordion-header" :id="'heading' + project.id">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" :data-bs-target="'#collapse' + project.id">
-                            {{ project.name }}
+                        <button class="accordion-button collapsed d-flex justify-content-between" type="button" data-bs-toggle="collapse" :data-bs-target="'#collapse' + project.id">
+                            <span class="text-truncate me-2">{{ project.name }}</span>
+                            <!-- Project Actions -->
+                            <div class="project-actions">
+                                <i class="bi bi-pencil-square action-icon" @click.stop="handleRenameProject(project.id, project.name)"></i>
+                                <i class="bi bi-trash action-icon text-danger" @click.stop="handleDeleteProject(project.id)"></i>
+                            </div>
                         </button>
                     </h2>
                     <div :id="'collapse' + project.id" class="accordion-collapse collapse" data-bs-parent="#projectsAccordion">
@@ -23,9 +28,10 @@
                                     :class="{ active: chat.id === activeChatId }"
                                     @click="$emit('select-chat', chat.id)">
                                     <span class="text-truncate">{{ chat.name }}</span>
-                                    <button class="btn btn-sm btn-outline-danger" @click.stop="handleDeleteChat(chat.id)">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
+                                    <div class="chat-actions">
+                                        <i class="bi bi-pencil-square action-icon" @click.stop="handleRenameChat(chat.id, chat.name)"></i>
+                                        <i class="bi bi-trash action-icon text-danger" @click.stop="handleDeleteChat(chat.id)"></i>
+                                    </div>
                                 </li>
                             </ul>
                             <button class="btn btn-sm btn-outline-secondary w-100 mt-2" @click="handleCreateChat(project.id)">
@@ -40,9 +46,6 @@
 </template>
 
 <script setup>
-import { onMounted, watch } from 'vue';
-// Bootstrap JS нужен для работы аккордеона
-import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { createProject, createChat } from '@/api.js';
 
 const props = defineProps({
@@ -51,34 +54,46 @@ const props = defineProps({
     activeChatId: Number,
 });
 
-const emit = defineEmits(['select-chat', 'project-created', 'chat-created','rename-project', 'delete-project', 'rename-chat', 'delete-chat']);
+const emit = defineEmits([
+    'select-chat', 
+    'project-created', 'rename-project', 'delete-project',
+    'chat-created', 'rename-chat', 'delete-chat'
+]);
 
-
+// --- CREATE ---
 const handleCreateProject = async () => {
     const name = prompt("Введите имя нового проекта:", "Новый проект");
     if (name && name.trim()) {
-        try {
-            await createProject(name.trim());
-            // <--- Отправляем событие родителю ---
-            emit('project-created');
-        } catch (error) {
-            console.error("Ошибка при создании проекта:", error);
-            alert("Не удалось создать проект.");
-        }
+        emit('project-created', name.trim());
     }
 };
 
 const handleCreateChat = async (projectId) => {
     const name = prompt("Введите имя нового чата:", "Новый чат");
     if (name && name.trim()) {
-        try {
-            const response = await createChat(projectId, name.trim());
-            // <--- Отправляем событие с данными нового чата ---
-            emit('chat-created', response.data);
-        } catch (error) {
-            console.error("Ошибка при создании чата:", error);
-            alert("Не удалось создать чат.");
-        }
+        emit('chat-created', { projectId, name: name.trim() });
+    }
+};
+
+// --- RENAME ---
+const handleRenameProject = (projectId, currentName) => {
+    const newName = prompt("Введите новое имя проекта:", currentName);
+    if (newName && newName.trim() && newName.trim() !== currentName) {
+        emit('rename-project', { id: projectId, name: newName.trim() });
+    }
+};
+
+const handleRenameChat = (chatId, currentName) => {
+    const newName = prompt("Введите новое имя чата:", currentName);
+    if (newName && newName.trim() && newName.trim() !== currentName) {
+        emit('rename-chat', { id: chatId, name: newName.trim() });
+    }
+};
+
+// --- DELETE ---
+const handleDeleteProject = (projectId) => {
+    if (confirm("Вы уверены, что хотите удалить этот проект и все его чаты?")) {
+        emit('delete-project', projectId);
     }
 };
 
@@ -113,5 +128,23 @@ const handleDeleteChat = (chatId) => {
 .list-group-item.active {
     background-color: #0d6efd;
     border-color: #0d6efd;
+}
+.action-icon {
+    cursor: pointer;
+    margin-left: 8px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+.action-icon:hover {
+    opacity: 1;
+}
+/* Hide actions by default */
+.project-actions, .chat-actions {
+    visibility: hidden;
+}
+/* Show on hover */
+.accordion-button:hover .project-actions,
+.list-group-item:hover .chat-actions {
+    visibility: visible;
 }
 </style>
